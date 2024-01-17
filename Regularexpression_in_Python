@@ -1,0 +1,100 @@
+import re
+from google.colab import drive
+
+drive.mount('/content/drive')
+
+file_path = '/content/drive/MyDrive/Colab Notebooks/statisticalreport_rawtext.txt'
+
+with open(file_path, 'r') as f:
+    text = f.read()
+
+"""
+関数の生成
+"""
+
+# 一括置換する正規表現パターン
+def resub(text, before, after):
+    pattern = re.compile(before, flags=re.MULTILINE)
+    modified_text = pattern.sub(after, text)
+    return modified_text
+
+# 一致するパターンがなくなるまで繰り返し置換処理する正規表現パターン
+def resub_repeatedly(text, before, after):
+    pattern = re.compile(before, flags=re.MULTILINE)
+    while True:
+        modified_text = pattern.sub(after, text)
+        if modified_text == text:
+            break
+        text = modified_text
+    return modified_text
+
+"""
+実際の処理はここから。レッスンの順番に従っています。
+"""
+# 置換処理の実行
+text1 = resub(text, "\"", "")
+text2 = resub(text1, "$", "#")
+text3 = resub(text2, "-[ ]#\n", "")
+text4 = resub(text3, "#\n#", "\n")
+text5 = resub(text4, "#\n", "")
+text6 = resub(text5, "^.*February 21.*?$\n", "")
+text7 = resub(text6, "^.*Received.*?$", "")
+text8 = resub(text7, "^$\n", "")
+# 行の整形が終わったこの段階で文頭をよく見てみると、13行目の"Morbidity", 38行目の"Cases", 50行目の"tuberculosis"に違和感があることに気づけるはず
+"""
+text8_1 = resub(text8, "\n^(Morbidity.*$)", "\1")
+text8_2 = resub(text8_1, "\n^(Cases.*$)", "\1")
+text8_3 = resub(text8_2, "\n^(tuberculosis.*$)", "\1")
+text9 = resub(text8_3, "[ ]?—[ ]?", "\t")
+# 以上4行を追加する代わりに次のtext9 = resub(text8, "[ ]?—[ ]?", "\t")をコメントアウトしてから、もう一度実行してみましょう
+"""
+text9 = resub(text8, "[ ]?—[ ]?", "\t")
+# text10 = resub(text9, "(Month of [A-Z][a-z, 0-9]+ 19[0-9][0-9].)", "<t>$1</t>")
+text10 = resub(text9, "(Month of [A-Z][a-z, 0-9]+ 19[0-9][0-9].)", r"<t>\1</t>")
+# pythonの正規表現では$1をキャプチャグループの参照とみなせないことがあります。そういうときには$1を\１に変えてみましょう。
+# また、併せて生の文字列リテラル（'r'という接頭辞を使用）を用いることで、\1を正しく参照と見なすことができます。
+text11 = resub(text10, "(For month of December, 1907, see Public Health Reports, January 17, 1908.)", r"<t>\1</t>")
+text12 = resub(text11, "([-A-Za-z ]+ ended [A-Z][a-z, 0-9]+ 19[0-9][0-9].)", r"<t>\1</t>")
+text13 = resub(text12, "(Estimated population[s]?, [0-9,]+\.)", r"<p>\1</p>")
+text14 = resub(text13, "(Total number of deaths[A-Za-z ,]* [0-9,]+[,.])", r"<N>\1</N>")
+text15 = resub(text14, "(a total of [0-9,]+ deaths,)", r"<N>\1</N>")
+text16 = resub(text15, "(Total number of deaths not reported.)", r"<N>\1</N>")
+text17 = resub(text16, "(Number of deaths not reported.)", r"<N>\1</N>")
+text18 = resub(text17, "^(.*?)<N>", r"\1\t<N>")
+text19 = resub(text18, "(Cases[ ]?:)", r"<c>\1</c>")
+text20 = resub(text19, "(Morbidity :)", r"<c>\1</c>")
+text21 = resub(text20, "([0-9]),[ ]", r"\1 ")
+text22 = resub(text21, "One", r"1")
+# pythonの正規表現では大文字と小文字を区別する・しないのオプションを使えません。そのため、区別するものとして文字列を設定します。
+# 今回だとすべて"One"のパターンなので楽ですが、両方ある場合には"[Oo]ne"というようにすればどちらにも対応できます。
+text23 = resub(text22, "Two", r"2")
+text24 = resub(text23, "including ([A-Za-z ]+) ([0-9,]+)", r"including <d>\1</d> <n>\2</n>")
+text25 = resub(text24, "including ([0-9]+) from ([A-Za-z ]+)[.,]", r"including <d>\2</d> <n>\1</n>")
+text26 = resub(text25, "(</[Nnc]>.*?)and[ ]([A-Za-z ]+)[ ]([0-9,]+?)\.", r"\1<d>\2</d> <n>\3</n>")
+text27 = resub(text26, "(</[Nnc]>.*?)and ([0-9,]+?) from ([A-Za-z ]+)\.", r"\1<d>\3</d> <n>\2</n>")
+text28 = resub_repeatedly(text27, "(</[nc]>[,]?) ([A-Za-z ]+) ([0-9,]+)[. ]+", r"\1 <d>\2</d> <n>\3</n> ")
+#この作業は一致がなくなるまで繰り返すので、resub_repeatedlyを使います。
+text29 = resub(text28, "<d>tuberculosis reported</d> <n>2</n>", r"<d>tuberculosis</d> <n>2</n>")
+text30 = resub(text29, "([0-9,]+) death[s]* from ([A-Za-z ]+)[,.]?", r"<d>\2</d> <n>\1</n> ")
+text31 = resub(text30, "([0-9,])+ from ([A-Za-z ]+)[,.]", r"<d>\2</d> <n>1</n>")
+text32 = resub(text31, "</c> ([A-Za-z]+), ([0-9]+).+?;", r"</c> <d>\1</d> <n>\2</n>")
+text33 = resub(text32, "([a-z][a-z ]+), ([0-9]+) cases.+?counties[ ;.]+", r"<d>\1</d> <n>\2</n> ")
+text34 = resub(text33, "^([A-Za-z .]+\t<t>)", r"\t\1")
+text35 = resub(text34, "^<t>", r"\t\t<t>")
+text36 = resub(text35, "^(.*?\t)(.*?\t)(<t>.*?</t>)(.*?)(<c>.*?$)", r"\1\2\3\4\n\1\2\3\t\5")
+text37 = resub_repeatedly(text36, "^(.*?\t)(.*?\t)(<t>.*?</t>\t)(<c>.*?</c>.*?)<d>(.*?)</d>.*?<n>(.*?)</n>(.*?$)", r"\1\2\3Cases\t\5\t\6\n\1\2\3\4\7")
+text38 = resub(text37, "^.*?\t.*?\t<t>.*?</t>\t<c>.*?</c>.*?\n", "")
+text39 = resub(text38, "^(.*?\t)(.*?\t)(<t>.*?</t>.*?\t)(.*?)<d>(.*?)</d>.*?<n>(.*?)</n>(.*?$)", r"\1\2\3\4\n\1\2\3Deaths\t\5\t\6\n\1\2\3Deaths\t\7")
+text40 = resub_repeatedly(text39, "^(.*?\t)(.*?\t)(.*?\t)Deaths\t.*?<d>(.*?)</d>.*?<n>(.*?)</n>(.*?$)", r"\1\2\3Deaths\t\4\t\5\n\1\2\3Deaths\t\6")
+text41 = resub(text40, "^.*?Deaths\t .*?$\n", "")
+text42 = resub(text41, "<[tpN]>(.*?)</[tpN]>", r"\1")
+
+# 生成されたテキストのチェック
+print(text42)
+
+# 保存するファイルのパスを指定（ここでは Google ドライブのルートディレクトリに保存）
+ff_path = '/content/drive/MyDrive/Colab Notebooks/statisticalreport_formatted.tsv'
+
+# ファイルに書き込む
+with open(ff_path, "w") as ff:
+    ff.write(text42)
